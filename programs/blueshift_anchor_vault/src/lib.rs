@@ -4,14 +4,20 @@ use anchor_lang::system_program::{transfer, Transfer};
 declare_id!("22222222222222222222222222222222222222222222");
 
 #[program]
-pub mod vault {
-    use anchor_lang::system_program::Transfer;
-
+pub mod blueshift_anchor_vault {
     use super::*;
 
     pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
-        require_eq!(ctx.accounts.vault.lamports(), 0, VaultError::VaultAlreadyExists);
-        require_gt!(amount, Rent::get()?.minimum_balance(0), VaultError::InvalidAmount);
+        require_eq!(
+            ctx.accounts.vault.lamports(),
+            0,
+            VaultError::VaultAlreadyExists
+        );
+        require_gt!(
+            amount,
+            Rent::get()?.minimum_balance(0),
+            VaultError::InvalidAmount
+        );
 
         transfer(
             CpiContext::new(
@@ -19,28 +25,29 @@ pub mod vault {
                 Transfer {
                     from: ctx.accounts.signer.to_account_info(),
                     to: ctx.accounts.vault.to_account_info(),
-                }
-            ), amount)?;
+                },
+            ),
+            amount,
+        )?;
+
         Ok(())
     }
-
     pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
-        require_eq!(ctx.accounts.vault.lamports(), 0, VaultError::InvalidAmount);
+        let bindings = ctx.accounts.signer.key();
+        let signer_seeds = &[b"vault", bindings.as_ref(), &[ctx.bumps.vault]];
 
-        let signer_key = ctx.accounts.signer.key();
-        let signer_seeds = &[b"vault", signer_key.as_ref(), &[ctx.bumps.vault]];
-        
         transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.system_program.to_account_info(),
                 Transfer {
                     from: ctx.accounts.vault.to_account_info(),
-                    to: ctx.accounts.signer.to_account_info() 
+                    to: ctx.accounts.signer.to_account_info(),
                 },
-                &[&signer_seeds[..]]
+                &[&signer_seeds[..]],
             ),
-            ctx.accounts.vault.lamports()
+            ctx.accounts.vault.lamports(),
         )?;
+
         Ok(())
     }
 }
@@ -49,19 +56,21 @@ pub mod vault {
 pub struct VaultAction<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
+
     #[account(
-        mut,
-        seeds = [b"vault", signer.key().as_ref()],
-        bump,
-    )]
+    mut,
+    seeds = [b"vault", signer.key().as_ref()],
+    bump,
+  )]
     pub vault: SystemAccount<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 #[error_code]
 pub enum VaultError {
-    #[msg("Vault Already exists")]
+    #[msg("Vault already exists")]
     VaultAlreadyExists,
-    #[msg("Invalid Amount")]
+    #[msg("Invalid amount")]
     InvalidAmount,
 }
